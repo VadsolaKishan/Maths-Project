@@ -3,10 +3,14 @@ import requests
 import numpy as np
 import json
 from datetime import datetime
+import os
 
 st.set_page_config(page_title="Matrix Calculator (Streamlit)", layout="wide")
 
-API_BASE = "http://localhost:5000"
+# Determine the API base URL based on the environment
+# For local development, use localhost
+# For deployment, replace with your public Flask API URL
+API_BASE = os.getenv("API_BASE", "http://localhost:5000")
 
 st.sidebar.header("Navigation")
 page = st.sidebar.radio("Go to", ["Calculator", "History"])
