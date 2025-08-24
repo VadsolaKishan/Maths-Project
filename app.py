@@ -16,7 +16,7 @@ CORS(app)
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    # create table if not exists
+    # base table
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +30,7 @@ def init_db():
     """)
     conn.commit()
 
-    # migrate: check if machine_id column exists
+    # check migration
     c.execute("PRAGMA table_info(history)")
     cols = [col[1] for col in c.fetchall()]
     if "machine_id" not in cols:
@@ -39,17 +39,15 @@ def init_db():
             conn.commit()
             print("✅ Migrated DB: added machine_id column")
         except Exception as e:
-            print("⚠️ Migration failed:", e)
+            print("⚠️ Migration error:", e)
 
     conn.close()
 
 def save_history(machine_id, operation, A, B, result):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute(
-        "INSERT INTO history (machine_id, operation, matrixA, matrixB, result) VALUES (?,?,?,?,?)",
-        (machine_id, operation, json.dumps(A), json.dumps(B), json.dumps(result))
-    )
+    c.execute("INSERT INTO history (machine_id, operation, matrixA, matrixB, result) VALUES (?,?,?,?,?)",
+              (machine_id, operation, json.dumps(A), json.dumps(B), json.dumps(result)))
     conn.commit()
     nid = c.lastrowid
     c.execute("SELECT created_at FROM history WHERE id=?", (nid,))
@@ -61,67 +59,55 @@ def save_history(machine_id, operation, A, B, result):
 def fetch_history(machine_id, limit=500):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute("""
-        SELECT id, operation, matrixA, matrixB, result, created_at
-        FROM history
-        WHERE machine_id=?
-        ORDER BY id DESC LIMIT ?
-    """, (machine_id, limit))
+    c.execute("""SELECT id, operation, matrixA, matrixB, result, created_at
+                 FROM history WHERE machine_id=?
+                 ORDER BY id DESC LIMIT ?""", (machine_id, limit))
     rows = c.fetchall()
     conn.close()
     out = []
     for r in rows:
         out.append({
-            "id": r[0],
-            "operation": r[1],
-            "A": json.loads(r[2]),
-            "B": json.loads(r[3]),
-            "result": json.loads(r[4]),
-            "time": r[5]
+            "id": r[0], "operation": r[1],
+            "A": json.loads(r[2]), "B": json.loads(r[3]),
+            "result": json.loads(r[4]), "time": r[5]
         })
     return out
 
-def delete_entry(entry_id):
+def delete_entry(eid):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute("DELETE FROM history WHERE id=?", (entry_id,))
+    c.execute("DELETE FROM history WHERE id=?", (eid,))
     conn.commit()
     conn.close()
     for fn in os.listdir(SAVED):
-        if fn.startswith(f"entry_{entry_id}_"):
-            try:
-                os.remove(os.path.join(SAVED, fn))
-            except Exception:
-                pass
+        if fn.startswith(f"entry_{eid}_"):
+            try: os.remove(os.path.join(SAVED, fn))
+            except: pass
 
 def create_saved_page(id_, operation, A, B, result, ts):
     try:
         safe_ts = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d_%H%M%S")
-    except Exception:
-        safe_ts = str(ts).replace(" ", "_").replace(":", "_")
+    except: safe_ts = str(ts).replace(" ", "_").replace(":", "_")
     filename = f"entry_{id_}_{safe_ts}.html"
     path = os.path.join(SAVED, filename)
-    html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Saved Entry #{id_}</title></head>
-    <body style="font-family:system-ui,Arial;padding:24px;background:#081126;color:#eaf4ff">
+    html = f"""<!doctype html><html><head><meta charset="utf-8"><title>Saved Entry #{id_}</title></head>
+    <body style="font-family:Arial;padding:24px;background:#081126;color:#eaf4ff">
       <h1>Saved Entry #{id_}</h1>
       <p style="color:#9fb1c9">{operation} — {ts}</p>
       <h3>Matrix A</h3>{render_matrix_html(A)}
       <h3>Matrix B</h3>{render_matrix_html(B)}
       <h3>Result</h3>{render_matrix_html(result)}
-      <p><a href="/">Back</a></p>
-    </body></html>"""
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(html)
+      <p><a href="/">Back</a></p></body></html>"""
+    with open(path, "w", encoding="utf-8") as f: f.write(html)
 
 def render_matrix_html(mat):
     try:
         html = '<table style="border-collapse:collapse">'
         for row in mat:
-            html += "<tr>" + "".join(f'<td style="border:1px solid rgba(0,0,0,0.12);padding:6px">{val}</td>' for val in row) + "</tr>"
+            html += "<tr>" + "".join(f'<td style="border:1px solid #999;padding:6px">{val}</td>' for val in row) + "</tr>"
         html += "</table>"
         return html
-    except Exception:
-        return f"<pre>{mat}</pre>"
+    except: return f"<pre>{mat}</pre>"
 
 # ---------- Routes ----------
 @app.route("/calculate", methods=["POST"])
@@ -134,25 +120,18 @@ def calculate():
 
     try:
         if op == "add":
-            if A.shape != B.shape:
-                return jsonify({"error":"Matrix sizes must match for addition"}), 400
+            if A.shape != B.shape: return jsonify({"error":"Matrix sizes must match for addition"}), 400
             res = (A + B).tolist()
         elif op == "sub":
-            if A.shape != B.shape:
-                return jsonify({"error":"Matrix sizes must match for subtraction"}), 400
+            if A.shape != B.shape: return jsonify({"error":"Matrix sizes must match for subtraction"}), 400
             res = (A - B).tolist()
         elif op == "mul":
-            if A.shape[1] != B.shape[0]:
-                return jsonify({"error":"For multiplication: cols(A) must equal rows(B)"}), 400
+            if A.shape[1] != B.shape[0]: return jsonify({"error":"For multiplication: cols(A) must equal rows(B)"}), 400
             res = (A @ B).tolist()
-        elif op == "transposeA":
-            res = A.T.tolist()
-        elif op == "transposeB":
-            res = B.T.tolist()
-        else:
-            return jsonify({"error":"Invalid operation"}), 400
-    except Exception as e:
-        return jsonify({"error":str(e)}), 400
+        elif op == "transposeA": res = A.T.tolist()
+        elif op == "transposeB": res = B.T.tolist()
+        else: return jsonify({"error":"Invalid operation"}), 400
+    except Exception as e: return jsonify({"error":str(e)}), 400
 
     nid, ts = save_history(machine_id, op, A.tolist(), B.tolist(), res)
     return jsonify({"result": res, "id": nid, "time": ts})
@@ -175,27 +154,22 @@ def api_export(entry_id):
     c.execute("SELECT id, machine_id, operation, matrixA, matrixB, result, created_at FROM history WHERE id=?", (entry_id,))
     r = c.fetchone()
     conn.close()
-    if not r:
-        abort(404)
-    out = {"id": r[0], "machine_id": r[1], "operation": r[2], "A": json.loads(r[3]), "B": json.loads(r[4]), "result": json.loads(r[5]), "time": r[6]}
+    if not r: abort(404)
+    out = {"id": r[0],"machine_id": r[1],"operation": r[2],
+           "A": json.loads(r[3]),"B": json.loads(r[4]),
+           "result": json.loads(r[5]),"time": r[6]}
     return jsonify(out)
 
 @app.route("/saved_pages/<path:fn>")
-def serve_saved(fn):
-    return send_from_directory(SAVED, fn)
+def serve_saved(fn): return send_from_directory(SAVED, fn)
 
 @app.route("/clear-history", methods=["POST"])
 def clear_history():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("DELETE FROM history")
-    conn.commit()
-    conn.close()
+    conn = sqlite3.connect(DB); c = conn.cursor()
+    c.execute("DELETE FROM history"); conn.commit(); conn.close()
     for f in os.listdir(SAVED):
-        try:
-            os.remove(os.path.join(SAVED, f))
-        except Exception:
-            pass
+        try: os.remove(os.path.join(SAVED, f))
+        except: pass
     return jsonify({"ok": True})
 
 if __name__ == "__main__":
