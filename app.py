@@ -16,10 +16,11 @@ CORS(app)
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
+    # create table if not exists
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        machine_id TEXT NOT NULL,
+        machine_id TEXT DEFAULT 'default',
         operation TEXT NOT NULL,
         matrixA TEXT NOT NULL,
         matrixB TEXT NOT NULL,
@@ -28,6 +29,18 @@ def init_db():
       )
     """)
     conn.commit()
+
+    # migrate: check if machine_id column exists
+    c.execute("PRAGMA table_info(history)")
+    cols = [col[1] for col in c.fetchall()]
+    if "machine_id" not in cols:
+        try:
+            c.execute("ALTER TABLE history ADD COLUMN machine_id TEXT DEFAULT 'default'")
+            conn.commit()
+            print("✅ Migrated DB: added machine_id column")
+        except Exception as e:
+            print("⚠️ Migration failed:", e)
+
     conn.close()
 
 def save_history(machine_id, operation, A, B, result):
