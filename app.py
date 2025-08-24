@@ -15,7 +15,7 @@ CORS(app)
 
 # ---------- DB helpers ----------
 def init_db():
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(DB, timeout=30)
     c = conn.cursor()
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
@@ -31,25 +31,22 @@ def init_db():
     conn.close()
 
 def save_history(operation, A, B, result):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("INSERT INTO history (operation, matrixA, matrixB, result) VALUES (?,?,?,?)",
-              (operation, json.dumps(A), json.dumps(B), json.dumps(result)))
-    conn.commit()
-    nid = c.lastrowid
-    c.execute("SELECT created_at FROM history WHERE id=?", (nid,))
-    ts = c.fetchone()[0]
-    conn.close()
+    with sqlite3.connect(DB, timeout=30) as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO history (operation, matrixA, matrixB, result) VALUES (?,?,?,?)",
+                  (operation, json.dumps(A), json.dumps(B), json.dumps(result)))
+        nid = c.lastrowid
+        c.execute("SELECT created_at FROM history WHERE id=?", (nid,))
+        ts = c.fetchone()[0]
     create_saved_page(nid, operation, A, B, result, ts)
     return nid, ts
 
 def fetch_history(limit=500):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history ORDER BY id DESC LIMIT ?",
-              (limit,))
-    rows = c.fetchall()
-    conn.close()
+    with sqlite3.connect(DB, timeout=30) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history ORDER BY id DESC LIMIT ?",
+                  (limit,))
+        rows = c.fetchall()
     out = []
     for r in rows:
         out.append({
@@ -63,11 +60,9 @@ def fetch_history(limit=500):
     return out
 
 def delete_entry(eid):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("DELETE FROM history WHERE id=?", (eid,))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB, timeout=30) as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM history WHERE id=?", (eid,))
     for fn in os.listdir(SAVED):
         if fn.startswith(f"entry_{eid}_"):
             try:
@@ -148,11 +143,10 @@ def api_delete(entry_id):
 
 @app.route("/export-entry/<int:entry_id>")
 def api_export(entry_id):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history WHERE id=?", (entry_id,))
-    r = c.fetchone()
-    conn.close()
+    with sqlite3.connect(DB, timeout=30) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history WHERE id=?", (entry_id,))
+        r = c.fetchone()
     if not r:
         abort(404)
     out = {"id": r[0], "operation": r[1], "A": json.loads(r[2]), "B": json.loads(r[3]), "result": json.loads(r[4]), "time": r[5]}
@@ -164,11 +158,9 @@ def serve_saved(fn):
 
 @app.route("/clear-history", methods=["POST"])
 def clear_history():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("DELETE FROM history")
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB, timeout=30) as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM history")
     for f in os.listdir(SAVED):
         try:
             os.remove(os.path.join(SAVED, f))
