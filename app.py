@@ -110,7 +110,7 @@ def calculate():
     op = body.get("operation")
 
     try:
-        res = None # Initialize res to None
+        res = None
         if op == "add":
             if A.shape != B.shape:
                 return jsonify({"error": "Matrix sizes must match for addition"}), 400
@@ -135,7 +135,6 @@ def calculate():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
 
 @app.route("/history")
 def history():
