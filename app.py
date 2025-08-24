@@ -1,9 +1,9 @@
-# app.py
 from flask import Flask, request, jsonify, send_from_directory, abort
 from flask_cors import CORS
 import sqlite3, json, os
 import numpy as np
 from datetime import datetime
+import gunicorn
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVED = os.path.join(BASE_DIR, "saved_pages")
@@ -105,6 +105,7 @@ def render_matrix_html(mat):
 @app.route("/calculate", methods=["POST"])
 def calculate():
     body = request.get_json(force=True)
+    # Change dtype to int
     A = np.array(body.get("A", []), dtype=int)
     B = np.array(body.get("B", []), dtype=int)
     op = body.get("operation")

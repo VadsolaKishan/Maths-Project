@@ -184,4 +184,3 @@ elif page == "History":
                     st.error(f"Delete failed: {e}")
     else:
         st.write("_No history entries yet_")
-
