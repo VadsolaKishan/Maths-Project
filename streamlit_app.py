@@ -7,13 +7,10 @@ import os
 
 st.set_page_config(page_title="Matrix Calculator (Streamlit)", layout="wide")
 
-# ✅ Auto-detect API base
-# If running locally → use localhost:5000
-# If deployed on Render → use your Render backend URL
-if "RENDER" in os.environ:
-    API_BASE = "https://maths-project-1.onrender.com"
-else:
-    API_BASE = "http://localhost:5000"
+# Determine the API base URL based on the environment
+# For local development, use localhost
+# For deployment, replace with your public Flask API URL
+API_BASE = "https://maths-project-1.onrender.com"  # Example URL
 
 st.sidebar.header("Navigation")
 page = st.sidebar.radio("Go to", ["Calculator", "History"])
@@ -29,6 +26,7 @@ if page == "Calculator":
         Safely resizes or creates a matrix with a given number of rows and columns.
         """
         if not isinstance(mat, list) or len(mat) == 0:
+            # Change initial values to int
             return [[0 for _ in range(c)] for _ in range(r)]
         
         while len(mat) < r:
@@ -69,6 +67,7 @@ if page == "Calculator":
             cols = st.columns(colsA)
             for j in range(colsA):
                 key = f"A-{i}-{j}"
+                # Use step=1 and convert to int
                 val = int(cols[j].number_input(f"A[{i+1}-{j+1}]", value=int(st.session_state.A[i][j]), key=key, step=1))
                 st.session_state.A[i][j] = val
 
@@ -81,6 +80,7 @@ if page == "Calculator":
             cols = st.columns(colsB)
             for j in range(colsB):
                 key = f"B-{i}-{j}"
+                # Use step=1 and convert to int
                 val = int(cols[j].number_input(f"B[{i+1}-{j+1}]", value=int(st.session_state.B[i][j]), key=key, step=1))
                 st.session_state.B[i][j] = val
 
@@ -92,19 +92,14 @@ if page == "Calculator":
             payload = {"A": st.session_state.A, "B": st.session_state.B, "operation": op}
             try:
                 resp = requests.post(f"{API_BASE}/calculate", json=payload, timeout=10)
-                try:
-                    data = resp.json()
-                except ValueError:
-                    st.error(f"Invalid response from API: {resp.text}")
-                    data = {}
-
-                if resp.ok and "result" in data:
+                data = resp.json()
+                if resp.ok:
                     st.session_state.last_result = data["result"]
                     st.session_state.last_id = data.get("id")
                     st.session_state.last_time = data.get("time")
                     st.success("Operation successful — saved in history")
                 else:
-                    st.error(data.get("error", "Unknown API error"))
+                    st.error(data.get("error","Unknown API error"))
             except Exception as e:
                 st.error(f"Network/API error: {e}")
 
@@ -131,11 +126,7 @@ elif page == "History":
     history = []
     try:
         res = requests.get(f"{API_BASE}/history?limit={history_limit}", timeout=5)
-        try:
-            history = res.json() if res.ok else []
-        except ValueError:
-            st.error(f"Invalid history response: {res.text}")
-            history = []
+        history = res.json() if res.ok else []
     except Exception as e:
         st.error(f"Cannot fetch history: {e}")
         history = []
@@ -193,3 +184,4 @@ elif page == "History":
                     st.error(f"Delete failed: {e}")
     else:
         st.write("_No history entries yet_")
+

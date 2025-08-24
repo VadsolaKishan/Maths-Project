@@ -17,17 +17,6 @@ CORS(app)
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-
-    # ✅ Check schema
-    c.execute("PRAGMA table_info(history)")
-    cols = [row[1] for row in c.fetchall()]
-
-    # If table exists but wrong schema (e.g. has machine_id), drop it
-    if "machine_id" in cols:
-        c.execute("DROP TABLE IF EXISTS history")
-        conn.commit()
-
-    # Create correct schema
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +105,7 @@ def render_matrix_html(mat):
 @app.route("/calculate", methods=["POST"])
 def calculate():
     body = request.get_json(force=True)
+    # Change dtype to int
     A = np.array(body.get("A", []), dtype=int)
     B = np.array(body.get("B", []), dtype=int)
     op = body.get("operation")
