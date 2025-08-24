@@ -17,6 +17,8 @@ CORS(app)
 def init_db():
     conn = sqlite3.connect(DB, timeout=30)
     c = conn.cursor()
+    # Drop the table to clear the old schema
+    c.execute("DROP TABLE IF EXISTS history")
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
