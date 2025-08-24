@@ -3,37 +3,34 @@ import requests
 import numpy as np
 import json
 from datetime import datetime
-import os
+import os, socket, uuid
 
 st.set_page_config(page_title="Matrix Calculator (Streamlit)", layout="wide")
 
-# Determine the API base URL based on the environment
-# For local development, use localhost
-# For deployment, replace with your public Flask API URL
-API_BASE = "https://maths-project-kishan-vadsola.onrender.com"  # Example URL
+# Determine the API base URL
+API_BASE = "https://maths-project-kishan-vadsola.onrender.com"  # change if needed
+
+# Assign a unique machine_id per user
+if "machine_id" not in st.session_state:
+    # You can use hostname or uuid
+    st.session_state.machine_id = socket.gethostname() + "-" + str(uuid.uuid4())[:8]
 
 st.sidebar.header("Navigation")
 page = st.sidebar.radio("Go to", ["Calculator", "History"])
 
 if page == "Calculator":
     st.title("Matrix Calculator — Streamlit UI")
-    st.write("Use the controls to build matrices, run operations (NumPy), and view history (stored by Flask).")
-    
+    st.write("Use the controls to build matrices, run operations, and view history (separate per machine).")
+
     left, right = st.columns([2, 1])
 
     def resize_matrix(mat, r, c):
-        """
-        Safely resizes or creates a matrix with a given number of rows and columns.
-        """
         if not isinstance(mat, list) or len(mat) == 0:
-            # Change initial values to int
             return [[0 for _ in range(c)] for _ in range(r)]
-        
         while len(mat) < r:
             mat.append([0] * c)
         while len(mat) > r:
             mat.pop()
-        
         for i in range(len(mat)):
             while len(mat[i]) < c:
                 mat[i].append(0)
@@ -67,7 +64,6 @@ if page == "Calculator":
             cols = st.columns(colsA)
             for j in range(colsA):
                 key = f"A-{i}-{j}"
-                # Use step=1 and convert to int
                 val = int(cols[j].number_input(f"A[{i+1}-{j+1}]", value=int(st.session_state.A[i][j]), key=key, step=1))
                 st.session_state.A[i][j] = val
 
@@ -80,7 +76,6 @@ if page == "Calculator":
             cols = st.columns(colsB)
             for j in range(colsB):
                 key = f"B-{i}-{j}"
-                # Use step=1 and convert to int
                 val = int(cols[j].number_input(f"B[{i+1}-{j+1}]", value=int(st.session_state.B[i][j]), key=key, step=1))
                 st.session_state.B[i][j] = val
 
@@ -89,7 +84,12 @@ if page == "Calculator":
         op = st.radio("Choose operation", ("add","sub","mul","transposeA","transposeB"), index=0, horizontal=True)
 
         if st.button("Run"):
-            payload = {"A": st.session_state.A, "B": st.session_state.B, "operation": op}
+            payload = {
+                "machine_id": st.session_state.machine_id,
+                "A": st.session_state.A,
+                "B": st.session_state.B,
+                "operation": op
+            }
             try:
                 resp = requests.post(f"{API_BASE}/calculate", json=payload, timeout=10)
                 data = resp.json()
@@ -116,7 +116,6 @@ if page == "Calculator":
 
 elif page == "History":
     st.header("Operation History")
-    
     st.sidebar.subheader("History Options")
     history_limit = st.sidebar.slider("Number of history entries to show", min_value=1, max_value=20, value=5)
 
@@ -125,7 +124,7 @@ elif page == "History":
 
     history = []
     try:
-        res = requests.get(f"{API_BASE}/history?limit={history_limit}", timeout=5)
+        res = requests.get(f"{API_BASE}/history?limit={history_limit}&machine_id={st.session_state.machine_id}", timeout=5)
         history = res.json() if res.ok else []
     except Exception as e:
         st.error(f"Cannot fetch history: {e}")
@@ -134,21 +133,9 @@ elif page == "History":
     if history:
         for h in history:
             st.markdown(f"**#{h['id']} — {h['operation']}** _{h['time']}_")
-            st.write("Matrix A:")
-            try:
-                st.table(np.array(h["A"]))
-            except Exception:
-                st.text(str(h["A"]))
-            st.write("Matrix B:")
-            try:
-                st.table(np.array(h["B"]))
-            except Exception:
-                st.text(str(h["B"]))
-            st.write("Result:")
-            try:
-                st.table(np.array(h["result"]))
-            except Exception:
-                st.text(str(h["result"]))
+            st.write("Matrix A:"); st.table(np.array(h["A"]))
+            st.write("Matrix B:"); st.table(np.array(h["B"]))
+            st.write("Result:"); st.table(np.array(h["result"]))
 
             cols = st.columns([1,1,1])
             try:
@@ -184,5 +171,3 @@ elif page == "History":
                     st.error(f"Delete failed: {e}")
     else:
         st.write("_No history entries yet_")
-
-
