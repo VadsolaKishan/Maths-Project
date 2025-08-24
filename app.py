@@ -105,35 +105,37 @@ def render_matrix_html(mat):
 @app.route("/calculate", methods=["POST"])
 def calculate():
     body = request.get_json(force=True)
-    # Change dtype to int
     A = np.array(body.get("A", []), dtype=int)
     B = np.array(body.get("B", []), dtype=int)
     op = body.get("operation")
 
     try:
+        res = None # Initialize res to None
         if op == "add":
             if A.shape != B.shape:
-                return jsonify({"error":"Matrix sizes must match for addition"}), 400
+                return jsonify({"error": "Matrix sizes must match for addition"}), 400
             res = (A + B).tolist()
         elif op == "sub":
             if A.shape != B.shape:
-                return jsonify({"error":"Matrix sizes must match for subtraction"}), 400
+                return jsonify({"error": "Matrix sizes must match for subtraction"}), 400
             res = (A - B).tolist()
         elif op == "mul":
             if A.shape[1] != B.shape[0]:
-                return jsonify({"error":"For multiplication: cols(A) must equal rows(B)"}), 400
+                return jsonify({"error": "For multiplication: cols(A) must equal rows(B)"}), 400
             res = (A @ B).tolist()
         elif op == "transposeA":
             res = A.T.tolist()
         elif op == "transposeB":
             res = B.T.tolist()
         else:
-            return jsonify({"error":"Invalid operation"}), 400
-    except Exception as e:
-        return jsonify({"error":str(e)}), 400
+            return jsonify({"error": "Invalid operation"}), 400
+        
+        nid, ts = save_history(op, A.tolist(), B.tolist(), res)
+        return jsonify({"result": res, "id": nid, "time": ts})
 
-    nid, ts = save_history(op, A.tolist(), B.tolist(), res)
-    return jsonify({"result": res, "id": nid, "time": ts})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 
 @app.route("/history")
 def history():
