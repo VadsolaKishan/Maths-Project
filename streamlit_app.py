@@ -5,7 +5,7 @@ import os, uuid
 
 st.set_page_config(page_title="Matrix Calculator", layout="wide")
 
-API_BASE = "http://localhost:5000"   # 👈 change if deployed online
+API_BASE = "https://maths-project-kishan-vadsola.onrender.com"   # 👈 change if deployed online
 
 # --- persistent machine_id ---
 MID_FILE = ".machine_id"
