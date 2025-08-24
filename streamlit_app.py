@@ -183,5 +183,9 @@ elif page == "History":
                 except Exception as e:
                     st.error(f"Delete failed: {e}")
     else:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 70a93f82c4e0a2750adf8434fb091f367443e2fd
         st.write("_No history entries yet_")
 
