@@ -91,8 +91,7 @@ if page == "Calculator":
         if st.button("Run"):
             payload = {"A": st.session_state.A, "B": st.session_state.B, "operation": op}
             try:
-                # Increased the timeout from 10 to 30 seconds
-                resp = requests.post(f"{API_BASE}/calculate", json=payload, timeout=30)
+                resp = requests.post(f"{API_BASE}/calculate", json=payload, timeout=10)
                 data = resp.json()
                 if resp.ok:
                     st.session_state.last_result = data["result"]
@@ -101,8 +100,6 @@ if page == "Calculator":
                     st.success("Operation successful — saved in history")
                 else:
                     st.error(data.get("error","Unknown API error"))
-            except requests.exceptions.ReadTimeout:
-                st.error("API took too long to respond. The server might be waking up. Please try again in a few moments.")
             except Exception as e:
                 st.error(f"Network/API error: {e}")
 
@@ -128,12 +125,8 @@ elif page == "History":
 
     history = []
     try:
-        # Increased the timeout from 5 to 30 seconds
-        res = requests.get(f"{API_BASE}/history?limit={history_limit}", timeout=30)
+        res = requests.get(f"{API_BASE}/history?limit={history_limit}", timeout=5)
         history = res.json() if res.ok else []
-    except requests.exceptions.ReadTimeout:
-        st.error("Cannot fetch history: API took too long to respond. The server might be waking up.")
-        history = []
     except Exception as e:
         st.error(f"Cannot fetch history: {e}")
         history = []
@@ -170,7 +163,7 @@ elif page == "History":
 
             if cols[1].button(f"Export {h['id']}", key=f"export-{h['id']}"):
                 try:
-                    r = requests.get(f"{API_BASE}/export-entry/{h['id']}", timeout=30)
+                    r = requests.get(f"{API_BASE}/export-entry/{h['id']}", timeout=5)
                     if r.ok:
                         data = r.json()
                         st.download_button(label="Download JSON", data=json.dumps(data, indent=2), file_name=f"entry_{h['id']}.json", mime="application/json")
@@ -181,7 +174,7 @@ elif page == "History":
 
             if cols[2].button(f"Delete {h['id']}", key=f"del-{h['id']}"):
                 try:
-                    r = requests.post(f"{API_BASE}/delete-entry/{h['id']}", timeout=30)
+                    r = requests.post(f"{API_BASE}/delete-entry/{h['id']}", timeout=5)
                     if r.ok:
                         st.success("Deleted")
                         st.rerun()
@@ -191,3 +184,4 @@ elif page == "History":
                     st.error(f"Delete failed: {e}")
     else:
         st.write("_No history entries yet_")
+
