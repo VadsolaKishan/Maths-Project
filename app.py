@@ -1,9 +1,9 @@
+# app.py
 from flask import Flask, request, jsonify, send_from_directory, abort
 from flask_cors import CORS
 import sqlite3, json, os
 import numpy as np
 from datetime import datetime
-import gunicorn
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVED = os.path.join(BASE_DIR, "saved_pages")
@@ -15,10 +15,8 @@ CORS(app)
 
 # ---------- DB helpers ----------
 def init_db():
-    conn = sqlite3.connect(DB, timeout=30)
+    conn = sqlite3.connect(DB)
     c = conn.cursor()
-    # Drop the table to clear the old schema
-    c.execute("DROP TABLE IF EXISTS history")
     c.execute("""
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,22 +31,25 @@ def init_db():
     conn.close()
 
 def save_history(operation, A, B, result):
-    with sqlite3.connect(DB, timeout=30) as conn:
-        c = conn.cursor()
-        c.execute("INSERT INTO history (operation, matrixA, matrixB, result) VALUES (?,?,?,?)",
-                  (operation, json.dumps(A), json.dumps(B), json.dumps(result)))
-        nid = c.lastrowid
-        c.execute("SELECT created_at FROM history WHERE id=?", (nid,))
-        ts = c.fetchone()[0]
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("INSERT INTO history (operation, matrixA, matrixB, result) VALUES (?,?,?,?)",
+              (operation, json.dumps(A), json.dumps(B), json.dumps(result)))
+    conn.commit()
+    nid = c.lastrowid
+    c.execute("SELECT created_at FROM history WHERE id=?", (nid,))
+    ts = c.fetchone()[0]
+    conn.close()
     create_saved_page(nid, operation, A, B, result, ts)
     return nid, ts
 
 def fetch_history(limit=500):
-    with sqlite3.connect(DB, timeout=30) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history ORDER BY id DESC LIMIT ?",
-                  (limit,))
-        rows = c.fetchall()
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history ORDER BY id DESC LIMIT ?",
+              (limit,))
+    rows = c.fetchall()
+    conn.close()
     out = []
     for r in rows:
         out.append({
@@ -62,9 +63,11 @@ def fetch_history(limit=500):
     return out
 
 def delete_entry(eid):
-    with sqlite3.connect(DB, timeout=30) as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM history WHERE id=?", (eid,))
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("DELETE FROM history WHERE id=?", (eid,))
+    conn.commit()
+    conn.close()
     for fn in os.listdir(SAVED):
         if fn.startswith(f"entry_{eid}_"):
             try:
@@ -107,31 +110,29 @@ def calculate():
     op = body.get("operation")
 
     try:
-        res = None
         if op == "add":
             if A.shape != B.shape:
-                return jsonify({"error": "Matrix sizes must match for addition"}), 400
+                return jsonify({"error":"Matrix sizes must match for addition"}), 400
             res = (A + B).tolist()
         elif op == "sub":
             if A.shape != B.shape:
-                return jsonify({"error": "Matrix sizes must match for subtraction"}), 400
+                return jsonify({"error":"Matrix sizes must match for subtraction"}), 400
             res = (A - B).tolist()
         elif op == "mul":
             if A.shape[1] != B.shape[0]:
-                return jsonify({"error": "For multiplication: cols(A) must equal rows(B)"}), 400
+                return jsonify({"error":"For multiplication: cols(A) must equal rows(B)"}), 400
             res = (A @ B).tolist()
         elif op == "transposeA":
             res = A.T.tolist()
         elif op == "transposeB":
             res = B.T.tolist()
         else:
-            return jsonify({"error": "Invalid operation"}), 400
-        
-        nid, ts = save_history(op, A.tolist(), B.tolist(), res)
-        return jsonify({"result": res, "id": nid, "time": ts})
-
+            return jsonify({"error":"Invalid operation"}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error":str(e)}), 400
+
+    nid, ts = save_history(op, A.tolist(), B.tolist(), res)
+    return jsonify({"result": res, "id": nid, "time": ts})
 
 @app.route("/history")
 def history():
@@ -145,10 +146,11 @@ def api_delete(entry_id):
 
 @app.route("/export-entry/<int:entry_id>")
 def api_export(entry_id):
-    with sqlite3.connect(DB, timeout=30) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history WHERE id=?", (entry_id,))
-        r = c.fetchone()
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT id, operation, matrixA, matrixB, result, created_at FROM history WHERE id=?", (entry_id,))
+    r = c.fetchone()
+    conn.close()
     if not r:
         abort(404)
     out = {"id": r[0], "operation": r[1], "A": json.loads(r[2]), "B": json.loads(r[3]), "result": json.loads(r[4]), "time": r[5]}
@@ -160,9 +162,11 @@ def serve_saved(fn):
 
 @app.route("/clear-history", methods=["POST"])
 def clear_history():
-    with sqlite3.connect(DB, timeout=30) as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM history")
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("DELETE FROM history")
+    conn.commit()
+    conn.close()
     for f in os.listdir(SAVED):
         try:
             os.remove(os.path.join(SAVED, f))
