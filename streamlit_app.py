@@ -11,7 +11,7 @@ st.set_page_config(page_title="Matrix Calculator (Streamlit)", layout="wide")
 # If running locally → use localhost:5000
 # If deployed on Render → use your Render backend URL
 if "RENDER" in os.environ:
-    API_BASE = "https://maths-project-kishan-vadsola.onrender.com"
+    API_BASE = "https://maths-project-1.onrender.com"
 else:
     API_BASE = "http://localhost:5000"
 
